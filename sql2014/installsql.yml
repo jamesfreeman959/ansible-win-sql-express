@@ -1,7 +1,9 @@
 - hosts: all
   gather_facts: True
+  become_method: runas
   vars:
    sql_instance_name: benz
+   ansible_become_password: xxxxx
   tasks:
    - debug: var=hostvars[inventory_hostname]
    - name: create a directory for installer download
@@ -44,8 +46,10 @@
    - name: Install the database
      win_command: c:\sql\installer\setup.exe /configurationfile=c:\sql\sql_conf.ini
      args:
-      chdir: c:\sql
-      
+       chdir: c:\sql
+     become: yes
+     become_user: Administrator
+
    - name: Add or update registry for ip port
      win_regedit:
        path: 'HKLM:\Software\Microsoft\Microsoft SQL Server\MSSQL12.{{ sql_instance_name }}\MSSQLServer\SuperSocketNetLib\Tcp\IPAll'
@@ -59,4 +63,3 @@
        force_dependent_services: yes
        state: restarted
      when: win_reg.changed
-      

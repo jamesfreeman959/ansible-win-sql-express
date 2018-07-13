@@ -1,0 +1,59 @@
+- hosts: all
+  gather_facts: True
+  become_method: runas
+  vars:
+   sql_instance_name: benz17
+   ansible_become_password: xxxxxx
+  tasks:
+   - debug: var=hostvars[inventory_hostname]
+   - name: create a directory for installer download
+     win_file: 
+        path: c:\sql17
+        state: directory
+   
+   - name: create a directory for installer extraction
+     win_file: 
+        path: c:\sql17\installer
+        state: directory
+
+   - name: create the configuration file
+     win_template: 
+       src: files/sql_conf.ini.j2
+       dest: c:\sql17\sql_conf.ini
+
+   - name: a pre requisite of sql net-framework-35
+     win_feature:
+        name: NET-Framework-Core
+        state: present
+
+   - name: check downloaded file exists
+     win_stat:
+        path: c:\sql17\sql_installer.exe
+     register: installer_file
+
+   - name: get the installer
+     win_get_url:
+          url: 'https://download.microsoft.com/download/5/E/9/5E9B18CC-8FD5-467E-B5BF-BADE39C51F73/SQLServer2017-SSEI-Expr.exe'
+          dest: 'c:\sql17\sql_installer.exe'
+     when: not installer_file.stat.exists
+   
+   - name: Install the database
+     win_command: c:\sql17\sql_installer.exe /configurationfile=c:\sql17\sql_conf.ini
+     args:
+       chdir: c:\sql17
+     become: yes
+     become_user: Administrator
+
+   - name: Add or update registry for ip port
+     win_regedit:
+       path: 'HKLM:\Software\Microsoft\Microsoft SQL Server\MSSQL14.{{ sql_instance_name }}\MSSQLServer\SuperSocketNetLib\Tcp\IPAll'
+       name: TcpPort
+       data: 1433
+     register: win_reg
+
+   - name: Restart a service
+     win_service:
+       name: 'MSSQL${{ sql_instance_name }}'
+       force_dependent_services: yes
+       state: restarted
+     when: win_reg.changed
